@@ -1,0 +1,27 @@
+/* @theme my-theme */
+@import "gaia";
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100..900&display=swap');
+
+section {
+  font-family: "Noto Sans JP", sans-serif;
+}
+
+.profile-icon {
+  position: absolute;
+  top: 50%;
+  right: 120px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: translateY(-50%);
+}
+
+.columns {
+  display: flex;
+  gap: 20px;
+
+  .column {
+    flex: 1;
+  }
+}
