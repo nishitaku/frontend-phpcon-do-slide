@@ -1,9 +1,17 @@
 ---
 marp: true
 theme: my-theme
+html: true
 paginate: true
 size: 16:9
 ---
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+mermaid.initialize({
+  startOnLoad: true,
+});
+</script>
 
 <!-- _class: lead invert -->
 <!-- _paginate: false -->
@@ -29,8 +37,9 @@ nishitaku
 # 自己紹介
 
 - 西濃 拓郎（にしの たくろう）/ @nishitaku
-- フリーランス / フロントエンドエンジニア（Angular）
-- 岐阜から来ました
+- フリーランス
+- フロントエンドエンジニア（Angular）
+- 奈良 > 神戸 > 川崎 > 名古屋 > 岐阜
 
 
 <img class="profile-icon" src="../images/icon_square.jpg" alt="nishitaku icon">
@@ -40,37 +49,51 @@ nishitaku
 西濃拓郎といいます。
 nishitakuのHNと、このメガネのアイコンでやらせてもらってます。
 普段はAngularを使った開発をメインに
-今日は岐阜からきました。
+今日は岐阜からきました。初登壇です。
 -->
 
 ---
+<!-- _class: lead  -->
+<!-- _paginate: false -->
 
-## 話すこと
+# Signals 知ってる人〜 :raised_hand:
+
+<!-- 
+Deep Diveのセッションなので、さすがに知らない人はいないと思うが・・・
+知らない人が多かったら、Signalsをざっくり解説するつもり
+ -->
+
+---
+
+# これから話すこと
 
 - Signals の本質は依存関係の追跡にある
 - Signals がどうやって依存関係の追跡を実現しているか
-
-## 話さないこと
-
-- Signals の API を網羅的には紹介しません
-- 各種FWの実装について
 
 ---
 
 # Signals とは
 
-- 状態と依存関係を扱うリアクティブモデル
-- fine-grained reactivity を実現
-- Angular / Vue / Solid / Preact / Qwik などで採用
+- 状態と依存関係を効率的に扱うリアクティブモデル
+- 各種フレームワーク、ライブラリで採用
 - TC39 proposal-signals (Stage 1)
 
 <!-- 
-まずは、Signalsの概論。
-Signals は単なる状態管理APIではなく、リアクティブモデル
-Reactで採用されてないので知名度は低い？
+まずは、Signalsについてざっくり紹介。
+Signals は単なる状態管理APIではなく、状態と依存関係を効率的に扱う、プリミティブなリアクティブモデル。
+依存関係というのがこれから何度もでてくる重要なキーワード。
+フロントエンドのフレームワークでも採用されているため、知っている人も多いはず。
+例えば、Angular、Vue.js、Solid.js、Preact、Svelte、Qwik。
+まだstage1だが、TC39のプロポーザルがあがっている。
+つまり、将来的にJavaScriptの標準APIとして実装される可能性がある。
+既存のFWの実装を取り入れて進めていく方針。
 -->
 
 ---
+
+# Signalsは何ができるのか？
+
+### 例：カウンターと偶奇判定
 
 ```js
 let counter = 0;
@@ -86,7 +109,7 @@ setInterval(() => setCounter(counter + 1), 1000);
 ```
 
 <!-- 
-これは後述するtc39のプロポーザルで紹介されているサンプルコードです。
+これはtc39のプロポーザルでも紹介されているサンプルコードです。
 counter > isEven > parity > render > DOM という依存関係がある。
 重要なのはruntimeがこの依存関係を知らないということ。
 つまり、counterが変更されたら、render()を呼ぶ必要がある、と開発者が知っておく必要がある。
@@ -94,14 +117,14 @@ counter > isEven > parity > render > DOM という依存関係がある。
 
 ---
 
+## 依存関係を知っておく必要がある
+
 ```js
 let counter = 0;
 const setCounter = (value) => {
   counter = value;
   renderParity();
-  
-  // counterが変更された時に、colorも変更されることを知っている必要がある
-  renderColor();
+  renderColor(); // colorも変更しないとだめ
 }
 
 const parity = () => (counter % 2) == 0 ? "even" : "odd";
@@ -114,13 +137,15 @@ setInterval(() => setCounter(counter + 1), 1000);
 ```
 
 <!-- 
-もしUIが増えた場合、counterに依存している場合、counterが変更されたときに、そのrenderを呼び出す必要がある。
+もしcounterに依存しているUIが増えた場合、counterが変更されたときに、そのrenderを呼び出す必要がある。
 これは見るからに大変で、counterに依存する状態が増えたびに、setCounterが大きくなる。
 さらに、実際のプロダクションコードでは、もっと状態が複雑に絡み合うため、破綻することは目に見えている。
 また、別の問題として、parityは偶数であれば"even"となるため、例えばcounterが2 > 4 となっても再計算され、無駄なrenderがはしってしまう。
 -->
 
 ---
+
+## Signals は依存関係を解決してくれる
 
 ```js
 const counter = signal(0);
@@ -142,8 +167,11 @@ effectでは副作用を扱うことができて、parityが変更された場�
 
 ---
 
+# Signalsは何ができるのか？
 
-```jsx
+### 例：宣言的UI
+
+```js
 const name = "太郎";
 const age = 20;
 
@@ -157,13 +185,15 @@ const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`;
 ```
 
 <!-- 
-フロントエンド開発でおなじみの宣言的UIでも同じことがいえます。
-例えば、このように、nameとageに基づいて計算した値を、テンプレートにバインドしている場合。
+次に、フロントエンド開発でおなじみの宣言的UIの例を考える。
+このように、nameとageに基づいて計算した値を、テンプレートにバインドしている場合。
  -->
 
 ---
 
-```jsx
+## 依存関係がわからないと無駄な処理が発生する
+
+```js
 const name = "太郎";
 const age = 21; // 変更された場合
 
@@ -191,7 +221,9 @@ validatedNameは依存しているのがnameだけなので、再計算したく
 
 ---
 
-```jsx
+## Signals は無駄がない
+
+```js
 const name = signal("太郎");
 const age = signal(21);
 
@@ -214,11 +246,215 @@ angular signalsで書き換えるとこうなる。
 # Signals のメリット
 
 - 状態間の依存関係を意識する必要がなくなる
-- 依存している計算だけが行われるため、パフォーマンスが上がる
+- 依存している計算だけが行われるため、無駄がない
 
 <!-- 
-ここまでを整理すると、Signalsの本質は状態間の依存関係を解決してくれるところにあります。
+ここまでを整理すると、Signalsの本質は状態間の依存関係を自動で解決してくれるところにある。
+依存関係が解決されて、必要な箇所だけ再計算されるため、無駄がない。
 -->
+
+---
+<!-- _class: lead -->
+<!-- _paginate: false -->
+
+# Push型 or Pull型 ?
+
+<!-- 
+データの通信方式にはPush型とPull型があります。
+Signalsはどちらになるのでしょうか？
+ -->
+
+--- 
+# Push型
+
+<style scoped>
+.profile-icon {
+  position: absolute;
+  top: 50%;
+  right: 120px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: translateY(-50%);
+}
+</style>
+
+状態変更時に、依存先へ即座に通知・再計算する方式。
+
+例：Observer Pattern、Pub/Sub、EventEmitter、RxJS
+
+
+<div class="columns">
+  <div class="column">
+  メリット
+
+* 常に最新状態
+* 読み取り時は速い
+* モデルが分かりやすい
+  </div>
+  <div class="column">
+  デメリット
+
+* 使われない値まで再計算
+* update storm が起きやすい
+* dependency graph が大きいと propagation コストが高い
+</div>
+</div>
+
+---
+<!-- _class: lead -->
+<!-- _paginate: false -->
+
+# Signals はどうやって依存関係を解決しているのか？
+
+<!-- 
+このDeep Diveセッションの本題。
+ -->
+
+---
+
+## 例:カウンターと偶奇判定
+
+```js
+const counter = signal(0);
+
+const parity = computed(() => (counter() % 2) == 0 ? "even" : "odd");
+
+effect(() => {
+  element.innerText = parity();
+});
+```
+
+### 1. 依存関係の登録
+### 2. Push
+### 3. Pull
+---
+
+<pre class="mermaid">
+sequenceDiagram
+    participant C as computed(parity)
+    participant R as runtime
+    participant S as signal(counter)
+
+    C->>R: activeConsumer = parity
+
+    C->>S: count()
+
+    S->>R: producerAccessed(count)
+
+    R->>S: subscribers.add(parity)
+    R->>C: dependencies.add(count)
+
+    C->>R: activeConsumer = null
+</pre>
+
+<!-- 
+dependency tracking phase
+countのsignalをparityのcomputedが呼び出すとき。
+本当はもう一つ左にeffectがいるが、複雑になるので割愛。
+countとparityはruntime経由で、activeConsumerという変数を共有している。
+computedは実行時にactiveConsumerに自身を登録した上で、count()をreadする。
+呼び出されたcount側は、activeConsumerを読んで、登録されているconsumerを、subscribers、つまり自身を呼び出しているconsumer一覧に登録する。
+
+
+ちなみにcomputedはnestするので、実際のactiveConsumerはstackになっている。
+-->
+
+---
+
+<pre class="mermaid">
+sequenceDiagram
+    participant E as effect
+    participant C as computed(parity)
+    participant S as signal(counter)
+    participant App
+
+    App->>S: counter.set(1)
+
+    S->>C: mark dirty
+    C->>C: dirty = true
+
+    C->>E: mark dirty
+    E->>E: dirty = true
+</pre>
+
+<!-- 
+push phase
+アプリケーションがcounterを変更したケースを考える。
+signalsは変更検知だけを伝播する。再計算はまだしない。
+ -->
+---
+
+<pre class="mermaid">
+sequenceDiagram
+    participant E as effect
+    participant C as computed(parity)
+
+    E->>C: parity()
+
+    alt dirty
+        C->>C: recompute
+    end
+
+    C-->>E: value
+</pre>
+
+<!-- 
+pull phase
+effectが実行され、computed parityが呼ばれたときdirtyの値をみる。
+dirtyじゃなかったら、キャッシュしていた値を返し、dirtyだったら再計算して返す。
+つまり、signalsはlazy incremental computation
+
+ -->
+
+---
+
+# まとめ
+
+- Signalsは dependency graph を構築する
+- dependency tracking によって依存関係を収集する
+- Push/Pull Hybrid により効率的に更新する
+
+---
+
+<!-- 
+このスライドで伝えたいこと
+
+Signals の本質を再定義する
+
+話す内容
+
+* Signals は dependency graph を構築する
+* dependency tracking によって依存関係を収集する
+* Push/Pull Hybrid によって効率的に更新する
+* 「必要な箇所だけ更新」の正体はこれだった
+ -->
+
+<!-- _class: lead invert -->
+<!-- _paginate: false -->
+# ご清聴ありがとうございました
+
+nishitaku
+
+
+---
+
+# static vs runtime
+
+## static tracking
+
+- compile-time
+- 速い
+- runtime軽い
+- dynamic dependency苦手
+
+## runtime tracking
+
+- 実行時tracking
+- dynamic dependency OK
+- fine-grained
+- runtime graph必要
 
 ---
 
@@ -256,21 +492,33 @@ runtimeで動的にdependency trackingすることで、fine-grained reactivity�
 
 ---
 
-# static vs runtime
+# 私とSignalsとの出会い
 
-## static tracking
+- Angular と zone.js
+- v16 で 導入された Signals によって環境が激変
+- Signals の魔法に感動して、仕組みが知りたくなった
 
-- compile-time
-- 速い
-- runtime軽い
-- dynamic dependency苦手
 
-## runtime tracking
+<!-- 
+本題に入る前に、私とSignalsとの出会いを話しておきたい。
+私はAngularを使っています。
+Signalsを知らない人はぜひ使ってみて欲しい
+-->
 
-- 実行時tracking
-- dynamic dependency OK
-- fine-grained
-- runtime graph必要
+---
+
+# signals のデメリット
+
+## グリッチフリー vs lossy
+
+Q: 「グリッチフリー（不整合のない）」実行とはどういう意味ですか？
+
+A: 初期のプッシュ型リアクティブモデルでは、State が変更されるたびに Computed が即座に走り、UI を更新しようとしていました。しかし、次のフレームまでに複数の変更がある場合、中間の不正確な値が表示される「グリッチ」が発生することがありました。Signal はプル型を採用することで、フレームワークが UI を描画するタイミングで必要な更新だけを取りに行くため、無駄な計算や DOM 操作、そして表示の不整合を避けることができます。
+
+Q: 「損失がある（lossy）」とはどういう意味ですか？
+
+A: これはグリッチフリーの裏返しです。Signal はデータの「セル」であり、現在の最新値を表します。時間の経過に伴う「ストリーム」ではありません。State に2回連続で書き込んだ場合、1回目の値は Computed や Effect に観測されることなく「失われ」ます。これはバグではなく、ストリームが必要な場合は Async Iterable や Observable を使うべきという設計上の意図です。
+
 
 ---
 
@@ -294,93 +542,6 @@ signalsはdirtyのみ通知されて、必要な場合にのみ再計算され�
 
 ---
 
-# Push-based or Pull-based ?
-
-<!-- 
-データの通信方式にはPush型とPull型があります。
-Signalsはどちらになるのでしょうか？
- -->
-
---- 
-# Push-based
-
-<style scoped>
-.profile-icon {
-  position: absolute;
-  top: 50%;
-  right: 120px;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  object-fit: cover;
-  transform: translateY(-50%);
-}
-</style>
-
-状態変更時に、依存先へ即座に通知・再計算する方式。
-
-例：Observer Pattern、Pub/Sub、EventEmitter、RxJS
-
-
-<div class="columns">
-  <div class="column">
-  メリット
-
-* 常に最新状態
-* 読み取り時は速い
-* モデルが分かりやすい
-  </div>
-  <div class="column">
-  デメリット
-
-* 使われない値まで再計算
-* update storm が起きやすい
-* dependency graph が大きいと propagation コストが高い
-</div>
-</div>
-
-
-
----
-
-# signals のデメリット
-
-## グリッチフリー vs lossy
-
-Q: 「グリッチフリー（不整合のない）」実行とはどういう意味ですか？
-
-A: 初期のプッシュ型リアクティブモデルでは、State が変更されるたびに Computed が即座に走り、UI を更新しようとしていました。しかし、次のフレームまでに複数の変更がある場合、中間の不正確な値が表示される「グリッチ」が発生することがありました。Signal はプル型を採用することで、フレームワークが UI を描画するタイミングで必要な更新だけを取りに行くため、無駄な計算や DOM 操作、そして表示の不整合を避けることができます。
-
-Q: 「損失がある（lossy）」とはどういう意味ですか？
-
-A: これはグリッチフリーの裏返しです。Signal はデータの「セル」であり、現在の最新値を表します。時間の経過に伴う「ストリーム」ではありません。State に2回連続で書き込んだ場合、1回目の値は Computed や Effect に観測されることなく「失われ」ます。これはバグではなく、ストリームが必要な場合は Async Iterable や Observable を使うべきという設計上の意図です。
-
----
-# Agenda
-
-1. Signalsとは何か
-2. 依存関係はどう追跡されるのか
-3. なぜ効率的なのか
-4. signal-polyfillを触って見えたこと
-5. まとめ
-
----
-
-# 私とSignalsとの出会い
-
-- Angular と zone.js
-- v16 で 導入された Signals によって環境が激変
-- Signals の魔法に感動して、仕組みが知りたくなった
-
-
-<!-- 
-本題に入る前に、私とSignalsとの出会いを話しておきたい。
-私はAngularを使っています。
-Signalsを知らない人はぜひ使ってみて欲しい
--->
-
----
-
 # signal-polyfillを触ってみて
 
 - 思ったよりシンプル
@@ -399,28 +560,3 @@ Signals は意外とシンプルなアルゴリズム
 * 内部構造を見ると理解しやすい
 * フレームワークごとの差より共通原理が見えてくる
  -->
-
----
-
-# まとめ
-
-- Signalsは dependency graph を構築する
-- dependency tracking によって依存関係を収集する
-- Push/Pull Hybrid により効率的に更新する
-
----
-
-<!-- 
-このスライドで伝えたいこと
-
-Signals の本質を再定義する
-
-話す内容
-
-* Signals は dependency graph を構築する
-* dependency tracking によって依存関係を収集する
-* Push/Pull Hybrid によって効率的に更新する
-* 「必要な箇所だけ更新」の正体はこれだった
- -->
-
-# Thank you
