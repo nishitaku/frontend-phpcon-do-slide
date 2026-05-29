@@ -17,24 +17,13 @@ mermaid.initialize({
 <!-- _paginate: false -->
 # Signals Deep Dive
 
-フロントエンドカンファレンス北海道 2026
+フロントエンド・PHPカンファレンス北海道 2026
 
 nishitaku
-<!-- 
-このスライドで伝えたいこと
-
-このトークは「Signals API紹介」ではなく、リアクティブシステムの内部構造を見る話
-
-話す内容
-
-* 最近いろんなフレームワークで Signals が出てきている
-* 今日は API の使い方ではなく「なぜ必要な箇所だけ更新できるのか」を見る
-* Angular 固有ではなく、リアクティブシステムの共通原理の話
- -->
 
 ---
 
-# 自己紹介
+## 自己紹介
 
 - 西濃 拓郎（にしの たくろう）/ @nishitaku
 - フリーランス
@@ -65,22 +54,22 @@ Deep Diveのセッションなので、さすがに知らない人はいない�
 
 ---
 
-# これから話すこと
+## これから話すこと
 
 - Signals の本質は依存関係の追跡にある
 - Signals がどうやって依存関係の追跡を実現しているか
 
 ---
 
-# Signals とは
+## Signals とは
 
-- 状態と依存関係を効率的に扱うリアクティブモデル
+- 状態と**依存関係**を効率的に扱うリアクティブモデル
 - 各種フレームワーク、ライブラリで採用
 - TC39 proposal-signals (Stage 1)
 
 <!-- 
 まずは、Signalsについてざっくり紹介。
-Signals は単なる状態管理APIではなく、状態と依存関係を効率的に扱う、プリミティブなリアクティブモデル。
+Signals は状態と依存関係を効率的に扱う、プリミティブなリアクティブモデル。
 依存関係というのがこれから何度もでてくる重要なキーワード。
 フロントエンドのフレームワークでも採用されているため、知っている人も多いはず。
 例えば、Angular、Vue.js、Solid.js、Preact、Svelte、Qwik。
@@ -91,7 +80,7 @@ Signals は単なる状態管理APIではなく、状態と依存関係を効率
 
 ---
 
-# Signalsは何ができるのか？
+## Signalsは何ができるのか？
 
 ### 例：カウンターと偶奇判定
 
@@ -117,7 +106,7 @@ counter > isEven > parity > render > DOM という依存関係がある。
 
 ---
 
-## 依存関係を知っておく必要がある
+### 依存関係を知っておく必要がある
 
 ```js
 let counter = 0;
@@ -145,29 +134,41 @@ setInterval(() => setCounter(counter + 1), 1000);
 
 ---
 
-## Signals は依存関係を解決してくれる
+### Signals の場合
+
+- **State**: 手動で設定される値
+- **Computed**: Stateに依存して計算される値
+- **Effect**: StateやComputedに依存して実行されるコールバック
 
 ```js
-const counter = signal(0);
+const counter = new Signal.State(0);
 
-const parity = computed(() => (counter() % 2) == 0 ? "even" : "odd");
+const parity = new Signal.Computed(() => (counter() % 2) == 0 ? "even" : "odd");
 
 effect(() => {
-  element.innerText = parity();
+  element.innerText = parity.get();
 });
 
-setInterval(() => counter.set(counter() + 1), 1000);
+setInterval(() => counter.set(counter.get() + 1), 1000);
 ```
 
 <!-- 
-Angular Signalsで書き換えた場合こうなる。
-parityはcounterにのみ依存し、counterが変更されたら、parityも変更される。
-effectでは副作用を扱うことができて、parityが変更された場合にのみ、レンダリングすることができる。
+Signalsの基本概念として、State、Computed、Effectの3要素がある。
+基本となる状態を表すState、Stateに依存して計算されるComputed。
+Effectは、StateやComputedの変化を検知して実行されるコールバック。
+
+先ほどまでのカウンターの例をSignalsで書き換えるとこうなる。
+まずcounterはsignalというStateで定義する。
+parityはcounterに依存するComputed。
+effectではparityに依存してレンダリングが行われる。
+
+この仕組みであれば先ほどのようにcounterに依存するUIが増えた場合も、Computedとeffectを追加するだけで済む。さらにSignalsはメモ化もしてくれるため、偶奇が変わらない場合はparityが変更されず、無駄なレンダリングがはしらない。
+
 -->
 
 ---
 
-# Signalsは何ができるのか？
+## Signalsは何ができるのか？
 
 ### 例：宣言的UI
 
@@ -186,16 +187,16 @@ const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`;
 
 <!-- 
 次に、フロントエンド開発でおなじみの宣言的UIの例を考える。
-このように、nameとageに基づいて計算した値を、テンプレートにバインドしている場合。
+このように、nameに依存するvalidatedNameとage依存するisEvenを、HTMLにバインドしている場合。
  -->
 
 ---
 
-## 依存関係がわからないと無駄な処理が発生する
+### 依存関係がわからない場合
 
 ```js
 const name = "太郎";
-const age = 21; // 変更された場合
+const age = 21; // 20から変更された場合
 
 const validatedName = () => `${f(name)}`;
 const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`; // 再計算したい
@@ -203,16 +204,18 @@ const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`; // 再計算し�
 
 ```html
 <p>名前は{{ validatedName }}です</p>
-<p>年齢は{{ isEven }}です。</p> // 更新したい
+<p>年齢は{{ isEven }}です。</p>
 ```
+
+- `isEven`だけではなく`validateName`も再計算する必要がある
 
 <!-- 
 ageが変更された場合を考える。
 validatedNameは依存しているのがnameだけなので、再計算したくない。
 一方で、isEvenはageに依存しているため、再計算が必要。
 
-しかし、テンプレート側は何が変更されたかわからないため、validatedNameとisEvenの両方の計算をする必要がある。
-もしvalidatedNameで呼び出されている処理が重たい処理だった場合、無駄が大きい。
+しかし、HTML側は何が変更されたかわからないため、validatedNameとisEvenの両方の計算をする必要がある。
+もしvalidatedNameで呼び出されている計算処理が重たい処理だった場合、無駄が大きい。
 
 補足：
 全部更新(Component-based reactivity)の代表がReact。
@@ -221,36 +224,29 @@ validatedNameは依存しているのがnameだけなので、再計算したく
 
 ---
 
-## Signals は無駄がない
+### Signals の場合
 
 ```js
 const name = signal("太郎");
-const age = signal(21);
+const age = signal(21); // 変更された場合
 
 const validatedName = computed(() => `${f(name)}`);
 const isEven = computed(() => `${age} % 2 === 0 ? '偶数' : '奇数'`);
 ```
 
-```
+```html
 <p>名前は{{ validatedName() }}です</p>
 <p>年齢は{{ isEven() }}です。</p>
 ```
 
+- `isEven`だけ再計算される(**自動依存関係トラッキング**)
+- 呼ばれてる場合だけ計算される(**遅延評価**)
+- 同じ値なら再評価しない(**メモ化**)
+
 <!-- 
 angular signalsで書き換えるとこうなる。
-テンプレートから参照しているisEvenが変更された場合のみ、再レンダリングされるため、無駄がない
--->
-
----
-
-# Signals のメリット
-
-- 状態間の依存関係を意識する必要がなくなる
-- 依存している計算だけが行われるため、無駄がない
-
-<!-- 
-ここまでを整理すると、Signalsの本質は状態間の依存関係を自動で解決してくれるところにある。
-依存関係が解決されて、必要な箇所だけ再計算されるため、無駄がない。
+変更されたageに依存するisEvenだけが再計算され、htmlの表示が更新される。
+さらに
 -->
 
 ---
@@ -265,42 +261,44 @@ Signalsはどちらになるのでしょうか？
  -->
 
 --- 
-# Push型
 
-<style scoped>
-.profile-icon {
-  position: absolute;
-  top: 50%;
-  right: 120px;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  object-fit: cover;
-  transform: translateY(-50%);
-}
-</style>
+## Push型<span class="reset">：状態変更時に、依存先へ即座に通知・再計算する方式</span>
+例：Pub/Sub、WebSocket、プッシュ通知
+- 常に最新状態
+- 無駄な再計算が発生しやすい
 
-状態変更時に、依存先へ即座に通知・再計算する方式。
+## Pull型<span class="reset">：値が必要になった時に取得して計算する方式</span>
 
-例：Observer Pattern、Pub/Sub、EventEmitter、RxJS
+例：ポーリング、関数呼び出し
+- 必要なときに取得して計算
+- 変更されていなくても取得してしまう
 
 
-<div class="columns">
-  <div class="column">
-  メリット
+<!-- 
+まずは、それぞれの方式の例と、特徴を。
+Push型は状態変更時に、依存先へ即座に通知、再計算する方式。つまり変更時に頑張る方式。
+ネットワークの文脈だとPub/Subが代表例です。あとはイベントや、コールバックなど。
+リアルタイム同期に使われる方式で、常に最新状態を維持できるが、通知された値がそのタイミングで必要かどうかを考えずに通知するため、無駄な再計算が発生しやすい
 
-* 常に最新状態
-* 読み取り時は速い
-* モデルが分かりやすい
-  </div>
-  <div class="column">
-  デメリット
+一方で、Pull型は値が必要になった時に取得して計算する方式。つまり値を読む時に頑張る方式。
+ネットワークの文脈だとポーリングになります。あとは通常の関数呼び出しなど。
+値が変更されていなくても取得しにいく必要がある、という無駄がある。
 
-* 使われない値まで再計算
-* update storm が起きやすい
-* dependency graph が大きいと propagation コストが高い
-</div>
-</div>
+どちらの方式も一長一短。場合によって使い分ける必要がある。
+ではSignalsはどちらか。
+
+-->
+
+---
+
+## Signals は Push-Pull ハイブリッド方式
+
+- Computedの評価は**Pull型**
+- Stateの変更は即座に通知される**Push型**
+
+<!-- 
+Computedの評価はPull型。元となるStateの値がずっと前に変更されていても、getされたタイミングで取得し、再計算する。一方で、Stateの変更は即座に通知されるPush型。したがって、SignalsはPush-Pullのハイブリット型といえる。
+ -->
 
 ---
 <!-- _class: lead -->
@@ -330,6 +328,8 @@ effect(() => {
 ### 2. Push
 ### 3. Pull
 ---
+
+### 依存関係の登録
 
 <pre class="mermaid">
 sequenceDiagram
@@ -363,6 +363,8 @@ computedは実行時にactiveConsumerに自身を登録した上で、count()を
 
 ---
 
+### Push
+
 <pre class="mermaid">
 sequenceDiagram
     participant E as effect
@@ -385,6 +387,8 @@ push phase
 signalsは変更検知だけを伝播する。再計算はまだしない。
  -->
 ---
+
+### Pull
 
 <pre class="mermaid">
 sequenceDiagram
@@ -410,7 +414,7 @@ dirtyじゃなかったら、キャッシュしていた値を返し、dirtyだ�
 
 ---
 
-# まとめ
+## まとめ
 
 - Signalsは dependency graph を構築する
 - dependency tracking によって依存関係を収集する
@@ -436,25 +440,6 @@ Signals の本質を再定義する
 # ご清聴ありがとうございました
 
 nishitaku
-
-
----
-
-# static vs runtime
-
-## static tracking
-
-- compile-time
-- 速い
-- runtime軽い
-- dynamic dependency苦手
-
-## runtime tracking
-
-- 実行時tracking
-- dynamic dependency OK
-- fine-grained
-- runtime graph必要
 
 ---
 
