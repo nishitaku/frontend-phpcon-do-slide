@@ -56,7 +56,7 @@ Deep Diveのセッションなので、さすがに知らない人はいない�
 
 ## これから話すこと
 
-- Signals の本質は依存関係の追跡にある
+- Signals 何ができるのか？
 - Signals がどうやって依存関係の追跡を実現しているか
 
 ---
@@ -65,22 +65,39 @@ Deep Diveのセッションなので、さすがに知らない人はいない�
 
 - 状態と**依存関係**を効率的に扱うリアクティブモデル
 - 各種フレームワーク、ライブラリで採用
+- 基本3要素
+  - **State**: 手動で設定される値
+  - **Computed**: Stateに依存して計算される値
+  - **Effect**: StateやComputedに依存して実行されるコールバック
 - TC39 proposal-signals (Stage 1)
 
 <!-- 
 まずは、Signalsについてざっくり紹介。
 Signals は状態と依存関係を効率的に扱う、プリミティブなリアクティブモデル。
-依存関係というのがこれから何度もでてくる重要なキーワード。
-フロントエンドのフレームワークでも採用されているため、知っている人も多いはず。
-例えば、Angular、Vue.js、Solid.js、Preact、Svelte、Qwik。
+この依存関係というのがこれから何度もでてくる重要なキーワード。
+フロントエンドのフレームワークでも採用されているため、実際に現場で使っている人もいるはず。
+自分もAngularで使っている。
+他にも、Vue.js、Solid.js、Preact、Svelte、Qwikなどで採用されている。
+Signalsの基本概念として、State、Computed、Effectの3要素がある。
+基本となる状態を表すState、Stateに依存して計算されるComputed。
+Effectは、StateやComputedの変化を検知して実行されるコールバック。
 まだstage1だが、TC39のプロポーザルがあがっている。
 つまり、将来的にJavaScriptの標準APIとして実装される可能性がある。
 既存のFWの実装を取り入れて進めていく方針。
 -->
 
 ---
+<!-- _class: lead invert -->
+<!-- _paginate: false -->
 
-## Signalsは何ができるのか？
+# Signals は何ができるのか？
+
+<!-- 
+Signalsの概要をお伝えしたところで、
+Signalsはいったい何ができるのか。何がうれしいのか、を解説していきたい。
+ -->
+
+---
 
 ### 例：カウンターと偶奇判定
 
@@ -136,14 +153,10 @@ setInterval(() => setCounter(counter + 1), 1000);
 
 ### Signals の場合
 
-- **State**: 手動で設定される値
-- **Computed**: Stateに依存して計算される値
-- **Effect**: StateやComputedに依存して実行されるコールバック
-
 ```js
 const counter = new Signal.State(0);
 
-const parity = new Signal.Computed(() => (counter() % 2) == 0 ? "even" : "odd");
+const parity = new Signal.Computed(() => (counter.get() % 2) == 0 ? "even" : "odd");
 
 effect(() => {
   element.innerText = parity.get();
@@ -153,10 +166,6 @@ setInterval(() => counter.set(counter.get() + 1), 1000);
 ```
 
 <!-- 
-Signalsの基本概念として、State、Computed、Effectの3要素がある。
-基本となる状態を表すState、Stateに依存して計算されるComputed。
-Effectは、StateやComputedの変化を検知して実行されるコールバック。
-
 先ほどまでのカウンターの例をSignalsで書き換えるとこうなる。
 まずcounterはsignalというStateで定義する。
 parityはcounterに依存するComputed。
@@ -167,8 +176,6 @@ effectではparityに依存してレンダリングが行われる。
 -->
 
 ---
-
-## Signalsは何ができるのか？
 
 ### 例：宣言的UI
 
@@ -245,19 +252,22 @@ const isEven = computed(() => `${age} % 2 === 0 ? '偶数' : '奇数'`);
 
 <!-- 
 angular signalsで書き換えるとこうなる。
-変更されたageに依存するisEvenだけが再計算され、htmlの表示が更新される。
-さらに
+変更されたageに依存するisEvenだけが再計算され、表示が更新される。
+さらにisEvenがテンプレートからもどこからも参照されていない場合は、そもそも再計算されない、遅延評価。
+isEvenの再計算結果が同じ場合は、通知されず、再レンダリングされない、メモ化がおこなわれる。
 -->
 
 ---
-<!-- _class: lead -->
+<!-- _class: lead invert -->
 <!-- _paginate: false -->
 
-# Push型 or Pull型 ?
+# Signals はどうやって
+# 依存関係の追跡を実現しているのか
 
 <!-- 
-データの通信方式にはPush型とPull型があります。
-Signalsはどちらになるのでしょうか？
+このDeep Diveセッションの本題。
+Signalsがどのような仕組みで依存関係の自動追跡を実現しているのかを詳しく解説していく。
+基本は、TC39プロポーザルの内容と、それに基づくsignal-polyfillsの実装を元にしている。
  -->
 
 --- 
@@ -275,6 +285,9 @@ Signalsはどちらになるのでしょうか？
 
 
 <!-- 
+データの通信方式にはPush型とPull型があります。
+Signalsはどちらになるのでしょうか？
+
 まずは、それぞれの方式の例と、特徴を。
 Push型は状態変更時に、依存先へ即座に通知、再計算する方式。つまり変更時に頑張る方式。
 ネットワークの文脈だとPub/Subが代表例です。あとはイベントや、コールバックなど。
@@ -301,45 +314,55 @@ Computedの評価はPull型。元となるStateの値がずっと前に変更さ
  -->
 
 ---
-<!-- _class: lead -->
-<!-- _paginate: false -->
 
-# Signals はどうやって依存関係を解決しているのか？
+## 依存関係を追跡するための３ステップ
+
+<div class="flow-image-container">
+<img src="../images/flow.dio.svg">
+</div>
 
 <!-- 
-このDeep Diveセッションの本題。
+signalsは3ステップで依存関係を追跡しています。
+まず、signalsはruntime経由でStateとComputed、ComputedとEffectの間に双方向の依存グラフを構築する。
+次に、Pushフェーズ。Stateが更新されたときに、変更されて古くなった、というフラグだけを、伝播する。このタイミングではまだ再計算しない。
+最後に、Pullフェーズ。通知されたフラグを見て、必要であれば再計算する。
  -->
 
 ---
 
-## 例:カウンターと偶奇判定
+### 例：カウンターと偶奇判定
 
 ```js
-const counter = signal(0);
+const counter = new Signal.State(0);
 
-const parity = computed(() => (counter() % 2) == 0 ? "even" : "odd");
+const parity = new Signal.Computed(() => (counter.get() % 2) == 0 ? "even" : "odd");
 
 effect(() => {
-  element.innerText = parity();
+  element.innerText = parity.get();
 });
 ```
 
-### 1. 依存関係の登録
-### 2. Push
-### 3. Pull
+`counter → parity → effect`の依存
+
+<!-- 
+カウンターと偶奇判定の例で、もっと具体的に見ていく。
+parityがcounterに依存して、effectがparityに依存している。
+
+ -->
+
 ---
 
-### 依存関係の登録
+### 依存グラフの構築
 
 <pre class="mermaid">
 sequenceDiagram
-    participant C as computed(parity)
+    participant C as Computed(parity)
     participant R as runtime
-    participant S as signal(counter)
+    participant S as State(counter)
 
     C->>R: activeConsumer = parity
 
-    C->>S: count()
+    C->>S: counter.get()
 
     S->>R: producerAccessed(count)
 
@@ -350,15 +373,13 @@ sequenceDiagram
 </pre>
 
 <!-- 
-dependency tracking phase
-countのsignalをparityのcomputedが呼び出すとき。
-本当はもう一つ左にeffectがいるが、複雑になるので割愛。
-countとparityはruntime経由で、activeConsumerという変数を共有している。
-computedは実行時にactiveConsumerに自身を登録した上で、count()をreadする。
-呼び出されたcount側は、activeConsumerを読んで、登録されているconsumerを、subscribers、つまり自身を呼び出しているconsumer一覧に登録する。
-
-
-ちなみにcomputedはnestするので、実際のactiveConsumerはstackになっている。
+まず、依存グラフを構築する。
+実際はもう一つ左にeffectがいて、effectとComputedの間にも構築されるが、話が複雑になるため、StateとComputedの間の話だけする。
+StateとComputedはruntime経由で、activeConsumerという変数を共有している。
+Computedは実行時にactiveConsumerに自身を登録した上で、countを読む。
+呼び出されたState側は、activeConsumerを読んで、登録されているconsumerを、subscribers、つまり自身を呼び出しているconsumer一覧に登録する。
+これによってStateとComputedの間の依存グラフが構築される。
+ちなみにComputedはnestするので、実際のactiveConsumerはstackになっている。
 -->
 
 ---
@@ -368,8 +389,8 @@ computedは実行時にactiveConsumerに自身を登録した上で、count()を
 <pre class="mermaid">
 sequenceDiagram
     participant E as effect
-    participant C as computed(parity)
-    participant S as signal(counter)
+    participant C as Computed(parity)
+    participant S as State(counter)
     participant App
 
     App->>S: counter.set(1)
@@ -382,10 +403,10 @@ sequenceDiagram
 </pre>
 
 <!-- 
-push phase
-アプリケーションがcounterを変更したケースを考える。
-signalsは変更検知だけを伝播する。再計算はまだしない。
- -->
+Pushフェーズ。
+アプリケーションがcounterを変更した場合、
+Stateは「変更されたこと」だけを伝播する。再計算はまだしない。
+-->
 ---
 
 ### Pull
@@ -393,9 +414,9 @@ signalsは変更検知だけを伝播する。再計算はまだしない。
 <pre class="mermaid">
 sequenceDiagram
     participant E as effect
-    participant C as computed(parity)
+    participant C as Computed(parity)
 
-    E->>C: parity()
+    E->>C: parity.get()
 
     alt dirty
         C->>C: recompute
@@ -405,34 +426,25 @@ sequenceDiagram
 </pre>
 
 <!-- 
-pull phase
-effectが実行され、computed parityが呼ばれたときdirtyの値をみる。
+Pullフェーズ。
+effectが実行され、Computedが呼ばれたとき、先ほど通知されたdirtyの値をみる。
 dirtyじゃなかったら、キャッシュしていた値を返し、dirtyだったら再計算して返す。
-つまり、signalsはlazy incremental computation
-
- -->
+これにより、無駄な再計算が発生しない仕組みを実現している。
+-->
 
 ---
 
-## まとめ
+## Signals Deep Dive のまとめ
 
-- Signalsは dependency graph を構築する
-- dependency tracking によって依存関係を収集する
-- Push/Pull Hybrid により効率的に更新する
+- 「誰が誰を読んだか」の依存グラフを構築する
+- Push-Pull ハイブリッド方式により必要時だけ再計算する
 
 ---
 
 <!-- 
-このスライドで伝えたいこと
-
-Signals の本質を再定義する
-
-話す内容
-
-* Signals は dependency graph を構築する
-* dependency tracking によって依存関係を収集する
-* Push/Pull Hybrid によって効率的に更新する
-* 「必要な箇所だけ更新」の正体はこれだった
+まとめです。
+Signalsは「誰が誰を読んだか」という依存グラフを構築する。
+その依存関係をもとに、Push-Pullハイブリッド方式で効率的に再計算する。
  -->
 
 <!-- _class: lead invert -->
@@ -475,35 +487,42 @@ runtimeで動的にdependency trackingすることで、fine-grained reactivity�
  
 -->
 
+
 ---
 
-# 私とSignalsとの出会い
+# グリッチフリー
 
-- Angular と zone.js
-- v16 で 導入された Signals によって環境が激変
-- Signals の魔法に感動して、仕組みが知りたくなった
+```js
+count = 1
+count = 2
+count = 3
+```
 
+- グリッチ：中間の不正確な値が表示されること
+- Push型リアクティブモデルの場合、変更が即座にUIに反映される
+- Signals はフレームワークが UI を描画するタイミングで必要な更新だけを取りに行くため、グリッチが発生しずらい
+- 「損失がある」ことの裏返しでもある。
 
 <!-- 
-本題に入る前に、私とSignalsとの出会いを話しておきたい。
-私はAngularを使っています。
-Signalsを知らない人はぜひ使ってみて欲しい
--->
+signalsはグリッチフリーという特徴がある。
+グリッチとは、中間の不正確な値が表示されること。
+このcountを更新する例の場合、最終的な3ではなく、途中の1や2の状態も表示されるということ。
+初期のプッシュ型リアクティブモデルの場合、Stateが変更されるたびにComputedが即座にはしり、UIを更新するため、グリッチが発生することがあった。
+一方で、signalsはpull型のデータ取得なので、フレームワークがUIを描画するタイミングで必要な更新だけを取りに行くため、グリッチが発生しずらい
+
+これはメリットばかりではなく、データを損失していると捉えることもできる。
+ストリームとして全てのデータが必要な場合は、Observableなどを使うべき。
+ -->
 
 ---
 
-# signals のデメリット
+# Signals のトレードオフ
 
-## グリッチフリー vs lossy
+- dependency graph を runtime で管理する必要がある
 
-Q: 「グリッチフリー（不整合のない）」実行とはどういう意味ですか？
+- dependency tracking のコストがある
 
-A: 初期のプッシュ型リアクティブモデルでは、State が変更されるたびに Computed が即座に走り、UI を更新しようとしていました。しかし、次のフレームまでに複数の変更がある場合、中間の不正確な値が表示される「グリッチ」が発生することがありました。Signal はプル型を採用することで、フレームワークが UI を描画するタイミングで必要な更新だけを取りに行くため、無駄な計算や DOM 操作、そして表示の不整合を避けることができます。
-
-Q: 「損失がある（lossy）」とはどういう意味ですか？
-
-A: これはグリッチフリーの裏返しです。Signal はデータの「セル」であり、現在の最新値を表します。時間の経過に伴う「ストリーム」ではありません。State に2回連続で書き込んだ場合、1回目の値は Computed や Effect に観測されることなく「失われ」ます。これはバグではなく、ストリームが必要な場合は Async Iterable や Observable を使うべきという設計上の意図です。
-
+- graph の理解が複雑になる
 
 ---
 
@@ -524,6 +543,21 @@ observerパターンはsubscribeして、observerがsubjectに依存を手動で
 signalsはdirtyのみ通知されて、必要な場合にのみ再計算される
  -->
 
+
+---
+
+# 私とSignalsとの出会い
+
+- Angular と zone.js
+- v16 で 導入された Signals によって環境が激変
+- Signals の魔法に感動して、仕組みが知りたくなった
+
+
+<!-- 
+本題に入る前に、私とSignalsとの出会いを話しておきたい。
+私はAngularを使っています。
+Signalsを知らない人はぜひ使ってみて欲しい
+-->
 
 ---
 
