@@ -455,6 +455,20 @@ nishitaku
 
 ---
 
+# Why Signals Deep Dive？
+
+- Angular と zone.js
+- v16 で 導入された Signals によって環境が激変
+- Signals の魔法に感動
+
+
+<!-- 
+私はAngularを使っています。
+Signalsを知らない人はぜひ使ってみて欲しい
+-->
+
+---
+
 # Runtime Dependency Tracking
 
 - ビルド時ではなく、実行時に依存を解決している
@@ -518,11 +532,10 @@ signalsはグリッチフリーという特徴がある。
 
 # Signals のトレードオフ
 
-- dependency graph を runtime で管理する必要がある
-
-- dependency tracking のコストがある
-
-- graph の理解が複雑になる
+- 「誰が誰を読むか」が実行時に決まる
+- 更新の流れを追うのが難しいことがある
+- 細かく分割しすぎると複雑になりやすい
+- Signals を使わない方がシンプルな場合もある
 
 ---
 
@@ -543,39 +556,29 @@ observerパターンはsubscribeして、observerがsubjectに依存を手動で
 signalsはdirtyのみ通知されて、必要な場合にのみ再計算される
  -->
 
+---
+
+# TC39 proposal-signals Stage 1
+
+- フレームワーク共通のリアクティブモデルを目指している
+- いくつかの課題をクリアしてから Stage 2 へ
+  - 複数の production-grade polyfill
+  - 複数 framework への統合検証
+  - パフォーマンス検証
 
 ---
 
-# 私とSignalsとの出会い
+# References
 
-- Angular と zone.js
-- v16 で 導入された Signals によって環境が激変
-- Signals の魔法に感動して、仕組みが知りたくなった
+## TC39 Signals
 
+-  [tc39/proposal-signals](https://github.com/tc39/proposal-signals)
+-  [signal-polyfill](https://github.com/proposal-signals/signal-polyfill)
+-  [A TC39 Proposal for Signals](https://eisenbergeffect.medium.com/a-tc39-proposal-for-signals-f0bedd37a335)
 
-<!-- 
-本題に入る前に、私とSignalsとの出会いを話しておきたい。
-私はAngularを使っています。
-Signalsを知らない人はぜひ使ってみて欲しい
--->
+## Framework Implementations
 
----
-
-# signal-polyfillを触ってみて
-
-- 思ったよりシンプル
-- 魔法ではない
-- dependency graph の伝播アルゴリズム
-
-<!-- 
-このスライドで伝えたいこと
-
-Signals は意外とシンプルなアルゴリズム
-
-話す内容
-
-* 最初は魔法っぽく見えた
-* 実際は dependency graph の伝播
-* 内部構造を見ると理解しやすい
-* フレームワークごとの差より共通原理が見えてくる
- -->
+- Angular Signals
+- Preact Signals
+- SolidJS
+- Vue Reactivity
