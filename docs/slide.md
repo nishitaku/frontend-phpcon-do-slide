@@ -22,49 +22,81 @@ mermaid.initialize({
 nishitaku
 
 ---
+<style scoped>
+section h1 {
+  margin-bottom: 70px;
+}
+</style>
 
-## 自己紹介
+# 初めまして
 
-- 西濃 拓郎（にしの たくろう）/ @nishitaku
-- フリーランス
-- フロントエンドエンジニア（Angular）
-- 奈良 > 神戸 > 川崎 > 名古屋 > 岐阜
-
-
+<div class="profile">
 <img class="profile-icon" src="../images/icon_square.jpg" alt="nishitaku icon">
+
+<div>
+
+#### 西濃 拓郎（にしの たくろう）
+
+#### [@nishitaku](https://x.com/nishitaku_dev)
+
+#### フリーランスエンジニア（10年目）
+
+<img class="angular" src="../images/angular_wordmark_gradient.png" alt="nishitaku icon">
+</div>
+
+</div>
 
 
 <!-- 
-西濃拓郎といいます。
-nishitakuのHNと、このメガネのアイコンでやらせてもらってます。
-普段はAngularを使った開発をメインに
-今日は岐阜からきました。初登壇です。
+初めまして、西濃拓郎といいます。。
+nishitakuのハンドルネームでフリーランスのエンジニアとして活動しています。今年で10年目になりました。。
+普段はAngularをつかったフロントエンドの開発を仕事にしています。
 -->
 
 ---
-<!-- _class: lead  -->
-<!-- _paginate: false -->
+<style scoped>
+section h2 {
+  margin-bottom: 100px;
+  margin-left: 40px
+}
+</style>
 
-# Signals 知ってる人〜 :raised_hand:
+# これから話すこと
+
+## Signals がどういう仕組みで動いているか
+
+# 持ち帰ってもらいたいこと
+
+## Signals の内部実装を理解して<br>リアクティブシステムの勘所を掴む
 
 <!-- 
-Deep Diveのセッションなので、さすがに知らない人はいないと思うが・・・
-知らない人が多かったら、Signalsをざっくり解説するつもり
+本トークはDeep Diveです。
+Deep Diveの価値は、ブラックボックスを減らして、なぜそう動くのかを理解することで、不具合調査やパフォーマンス改善の精度をあげることにあると思っています。
+これから私はsignalsがどういう仕組みで動いているか、どうやって効率的に必要な箇所だけを更新しているのかを解説します。
+signalsは各種フロントエンドFWも採用されていて、モダンフロントエンドのリアクティブシステムの基盤になっています。
+つまり、みなさんには、signalsの内部実装を少しでも理解していただくことで、リアクティブシステムの勘所を掴んでもらいたいと思っています。
  -->
 
 ---
 
-## これから話すこと
+# 目次
 
-- Signals 何ができるのか？
-- Signals がどうやって依存関係の追跡を実現しているか
+### 1. Signals 概要
+### 2. 特徴① 依存関係の自動追跡
+### 3. 特徴② Push-Pull ハイブリッド方式
+### 4. 特徴③ メモ化
+### 5. どうやって依存関係を追跡しているのか
 
 ---
 
-## Signals とは
+# Signals 概要
+
+```ts
+const counter = signal(0);
+```
 
 - 状態と**依存関係**を効率的に扱うリアクティブモデル
-- 各種フレームワーク、ライブラリで採用
+- 各フレームワーク(Angular/Preact/Svelte/Vue ...etc)で採用
 - 基本3要素
   - **State**: 手動で設定される値
   - **Computed**: Stateに依存して計算される値
@@ -72,91 +104,60 @@ Deep Diveのセッションなので、さすがに知らない人はいない�
 - TC39 proposal-signals (Stage 1)
 
 <!-- 
-まずは、Signalsについてざっくり紹介。
-Signals は状態と依存関係を効率的に扱う、プリミティブなリアクティブモデル。
-この依存関係というのがこれから何度もでてくる重要なキーワード。
-フロントエンドのフレームワークでも採用されているため、実際に現場で使っている人もいるはず。
-自分もAngularで使っている。
-他にも、Vue.js、Solid.js、Preact、Svelte、Qwikなどで採用されている。
-Signalsの基本概念として、State、Computed、Effectの3要素がある。
-基本となる状態を表すState、Stateに依存して計算されるComputed。
-Effectは、StateやComputedの変化を検知して実行されるコールバック。
-まだstage1だが、TC39のプロポーザルがあがっている。
-つまり、将来的にJavaScriptの標準APIとして実装される可能性がある。
-既存のFWの実装を取り入れて進めていく方針。
+まず、知らない人もいると思うので、Signalsについてざっくり紹介します。
+signalsは状態と依存関係を効率的に扱う、プリミティブなリアクティブモデルです。この依存関係というのがこれから何度もでてくる重要なキーワードになります。
+フロントエンドの各種フレームワークでも採用されているので、現場で使っている人もいると思う。自分もAngularで使っています。
+Signalsの基本概念として、State、Computed、Effectの3要素があります。後からでてくるコードを見た方がわかりやすいので、ここでの説明は割愛します。
+また、TC39のプロポーザルがあがっている。まだstage1だが、将来的にJavaScriptの標準APIとして実装されて、各フレームークの独自実装が置き換わることを期待されています。
 -->
 
 ---
 <!-- _class: lead invert -->
 <!-- _paginate: false -->
 
-# Signals は何ができるのか？
+# Signals の特徴①
+
+# 依存関係の自動追跡
 
 <!-- 
-Signalsの概要をお伝えしたところで、
-Signalsはいったい何ができるのか。何がうれしいのか、を解説していきたい。
+まず、signalsの1つ目の特徴として依存関係の自動追跡について解説していきます。
  -->
 
 ---
 
-### 例：カウンターと偶奇判定
+## Vanilla JSの場合
 
 ```js
 let counter = 0;
 const setCounter = (value) => {
   counter = value;
-  renderParity();
-}
+  render();
+};
 
-const parity = () => (counter % 2) == 0 ? "even" : "odd";
-const renderParity = () => element.innerText = parity();
+const isEven = () => (counter & 1) == 0;
+const parity = () => isEven() ? "even" : "odd";
+const render = () => element.innerText = parity();
 
 setInterval(() => setCounter(counter + 1), 1000);
 ```
 
+#### 開発者が依存関係を知っておく必要がある<br>→ 変更時の対応漏れや過剰更新が問題になる
+
 <!-- 
-これはtc39のプロポーザルでも紹介されているサンプルコードです。
-counter > isEven > parity > render > DOM という依存関係がある。
-重要なのはruntimeがこの依存関係を知らないということ。
-つまり、counterが変更されたら、render()を呼ぶ必要がある、と開発者が知っておく必要がある。
+まず、VanillaJSでカウンターと偶奇判定を実装するケースを考えてみます。counterという変数があり、その値が偶数か奇数かをDOMにレンダリングしたいとします。counterが変化するたびに、最新の値を反映してDOMを更新する必要があります。
+このコードにはいくつか問題がありますが、一番大きな問題は、依存関係を開発者が知っておく必要がある、ということです。状態や計算、UIが複雑になっていくと、知っておくべき依存関係が増えるため、変更時の対応漏れや過剰な更新が発生し、アプリケーションがスケールしません。
+
+(補足)例えば、別の開発者がisEvenの値を表示したい、とします。その人はisEvenがcounterに依存していること知らないため、setCounterで、そのisEvenを表示する関数を呼び出すのを忘れてしまい、結果、counterが更新されてもisEvenの表示が更新されない、という問題が発生する
  -->
 
 ---
 
-### 依存関係を知っておく必要がある
-
-```js
-let counter = 0;
-const setCounter = (value) => {
-  counter = value;
-  renderParity();
-  renderColor(); // colorも変更しないとだめ
-}
-
-const parity = () => (counter % 2) == 0 ? "even" : "odd";
-const renderParity = () => element.innerText = parity();
-
-const color = () => (counter % 2) == 0 ? "blue" : "red";
-const renderColor = () => counterEl.innerText = color();
-
-setInterval(() => setCounter(counter + 1), 1000);
-```
-
-<!-- 
-もしcounterに依存しているUIが増えた場合、counterが変更されたときに、そのrenderを呼び出す必要がある。
-これは見るからに大変で、counterに依存する状態が増えたびに、setCounterが大きくなる。
-さらに、実際のプロダクションコードでは、もっと状態が複雑に絡み合うため、破綻することは目に見えている。
-また、別の問題として、parityは偶数であれば"even"となるため、例えばcounterが2 > 4 となっても再計算され、無駄なrenderがはしってしまう。
--->
-
----
-
-### Signals の場合
+## Signals の場合
 
 ```js
 const counter = new Signal.State(0);
-
-const parity = new Signal.Computed(() => (counter.get() % 2) == 0 ? "even" : "odd");
+const isEven = new Signal.Computed(() => (counter.get() & 1) == 0);
+const parity = new Signal.Computed(() => isEven.get() ? "even" : "odd");
 
 effect(() => {
   element.innerText = parity.get();
@@ -165,64 +166,39 @@ effect(() => {
 setInterval(() => counter.set(counter.get() + 1), 1000);
 ```
 
-<!-- 
-先ほどまでのカウンターの例をSignalsで書き換えるとこうなる。
-まずcounterはsignalというStateで定義する。
-parityはcounterに依存するComputed。
-effectではparityに依存してレンダリングが行われる。
+#### runtimeが依存関係を把握してくれる<br>→ 依存関係が増えてもスケールしやすい
 
-この仕組みであれば先ほどのようにcounterに依存するUIが増えた場合も、Computedとeffectを追加するだけで済む。さらにSignalsはメモ化もしてくれるため、偶奇が変わらない場合はparityが変更されず、無駄なレンダリングがはしらない。
+<!-- 
+先ほどの例をsignalsで書き換えるとこうなります。
+まずcounterはStateで定義する。
+isEvenはcounterに依存するComputed、parityはisEvenに依存するComputedになります。こうすることで、counterが変更されたときに、isEventが自動で計算され、isEvenが計算されたときにparityが自動で計算されます。
+さらに、effectはparityに依存します。こうすることで、parityが変更されたときに、effect内のコールバックが呼ばれ、レンダリングされます。
+このように依存関係をruntimeが把握できる仕組みにすることで、変更伝搬を自動化できるため、依存関係が増えてもスケールしやすいのがsignalの大きなメリットの１つと言えます。
 
 -->
 
 ---
 
-### 例：宣言的UI
+## 宣言的UIの場合
 
 ```js
-const name = "太郎";
-const age = 20;
+// JavaScript
+let name = "太郎";
+let age = 20;
+const validatedName = () => f(name);
+const parity = () => (age % 2 === 0 ? '偶数' : '奇数');
 
-const validatedName = () => `${f(name)}`;
-const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`;
+// HTML
+<p>名前は{{ validatedName() }}です</p>
+<p>年齢は{{ parity() }}です。</p>
 ```
 
-```html
-<p>名前は{{ validatedName }}です</p>
-<p>年齢は{{ isEven }}です。</p>
-```
+#### 依存関係がわからないと、`age`が変更されたときに<br>`parity`だけでなく`validatedName`も再計算する必要がある
 
 <!-- 
-次に、フロントエンド開発でおなじみの宣言的UIの例を考える。
-このように、nameに依存するvalidatedNameとage依存するisEvenを、HTMLにバインドしている場合。
- -->
-
----
-
-### 依存関係がわからない場合
-
-```js
-const name = "太郎";
-const age = 21; // 20から変更された場合
-
-const validatedName = () => `${f(name)}`;
-const isEven = () => `${age} % 2 === 0 ? '偶数' : '奇数'`; // 再計算したい
-```
-
-```html
-<p>名前は{{ validatedName }}です</p>
-<p>年齢は{{ isEven }}です。</p>
-```
-
-- `isEven`だけではなく`validateName`も再計算する必要がある
-
-<!-- 
-ageが変更された場合を考える。
-validatedNameは依存しているのがnameだけなので、再計算したくない。
-一方で、isEvenはageに依存しているため、再計算が必要。
-
-しかし、HTML側は何が変更されたかわからないため、validatedNameとisEvenの両方の計算をする必要がある。
-もしvalidatedNameで呼び出されている計算処理が重たい処理だった場合、無駄が大きい。
+次に、フロントエンド開発でおなじみの宣言的UIの場合を考えてみます。
+nameとageという状態が定義されていて、nameに依存するvalidatedNameとage依存するparityがあって、それぞれHTMLにバインドします。
+例えばageが変更された場合、本来であれば依存しているparityだけを再計算すればいいのですが、runtimeが依存関係をしらないと全て再計算して再描画する必要があります。もしvalidatedNameで呼び出されている関数fが重たい処理だった場合、無駄が大きいです。
 
 補足：
 全部更新(Component-based reactivity)の代表がReact。
@@ -231,30 +207,112 @@ validatedNameは依存しているのがnameだけなので、再計算したく
 
 ---
 
-### Signals の場合
+## Signals の場合
 
 ```js
+// JavaScript
 const name = signal("太郎");
-const age = signal(21); // 変更された場合
+const age = signal(20);
+const validatedName = computed(() => f(name()));
+const parity = () => (age() % 2 === 0 ? '偶数' : '奇数');
 
-const validatedName = computed(() => `${f(name)}`);
-const isEven = computed(() => `${age} % 2 === 0 ? '偶数' : '奇数'`);
-```
-
-```html
+// HTML
 <p>名前は{{ validatedName() }}です</p>
-<p>年齢は{{ isEven() }}です。</p>
+<p>年齢は{{ parity() }}です。</p>
 ```
 
-- `isEven`だけ再計算される(**自動依存関係トラッキング**)
-- 呼ばれてる場合だけ計算される(**遅延評価**)
-- 同じ値なら再評価しない(**メモ化**)
+#### runtimeが依存関係を把握してくれる<br>→ 必要な計算だけを再実行できる＝無駄な計算を減らせる
 
 <!-- 
-angular signalsで書き換えるとこうなる。
-変更されたageに依存するisEvenだけが再計算され、表示が更新される。
-さらにisEvenがテンプレートからもどこからも参照されていない場合は、そもそも再計算されない、遅延評価。
-isEvenの再計算結果が同じ場合は、通知されず、再レンダリングされない、メモ化がおこなわれる。
+先ほどの例をAngular signalsで書き換えるとこうなります。
+runtimeが依存関係を把握しているため、ageが変更された場合は、ageに依存するparityだけが再計算されます。つまり無駄な計算を減らすことができます。
+-->
+
+---
+<!-- _class: lead -->
+<!-- _paginate: false -->
+
+# Signals を使うことで
+
+# 自動で依存関係を追跡できる
+
+<!-- 
+ここまでを一旦整理すると、signalsを使うことで、自動で依存関係を追跡してくれる、といえます。自動で追跡してくれるため、全体がスケールしますし、必要な計算だけを再実行できる、ということになります。
+
+ -->
+
+---
+<!-- _class: lead invert -->
+<!-- _paginate: false -->
+
+# Signals の特徴②
+
+# Push-Pull ハイブリッド方式
+
+<!-- 
+次に、signalsの2つ目の特徴として、Push-Pullハイブリッド方式によるデータの通信について解説していきます。
+-->
+
+--- 
+<style scoped>
+section ul {
+  margin-top: 0px;
+}
+</style>
+
+## データを誰が主導して渡すか
+
+### Push型<span class="reset">：データを持っている側が通知する</span>
+
+- 例）Pub/Sub、WebSocket、Observerパターン、EventEmitter
+- 常に最新状態
+- 無駄な再計算が発生しやすい
+
+
+### Pull型<span class="reset">：データを使う側が取りにいく</span>
+
+- 例）ポーリング、getter、関数呼び出し
+- 必要なときに取得して計算
+- 毎回取得コストが発生してしまう
+
+<!-- 
+Push型、Pull型というのは、さまざまな文脈で使われる概念ですが、データを誰が手動して渡すかを表す言葉として用いられます。
+Push型はデータを持っている側が更新されたことを通知する、つまり変更時に頑張る方式です。Pub/SubやWebSocket、ObserverパターンやEventEmitterがPush型の代表例です。
+リアルタイム同期によく使われる方式で、常に最新状態を維持できるますが、一方的に通知されるため、データを使う側で無駄な再計算が発生しやすいです。
+
+一方で、Pull型はデータを使う側が取りにいく、つまり値を読む時に頑張る方式。ポーリングが代表例です。あとは通常の関数呼び出しもPull型になります。変更されていなくても取得するのでコストがかかります。
+-->
+
+---
+
+## Push-Pull ハイブリッド方式
+
+```js
+const counter = new Signal.State(0);
+const isEven = new Signal.Computed(() => (counter.get() & 1) == 0);
+```
+
+#### Stateの変更は即座に通知される**Push型**
+
+#### Computedの評価は**Pull型**
+
+
+<!-- 
+signalsは先ほどのPush型とPull型のいいとこ取りをしたハイブリッド方式です。Stateの変更は即座に通知されるPush型です。この例だと、counterが変更されたときに、isEvenに即座に通知されます。
+一方で、Computedの評価はPull型です。元となるStateの値がずっと前に変更されていても、getされたタイミングで取得し、再計算します。この例だとisEventが呼び出されたタイミングで再計算します。
+ -->
+
+---
+<!-- _class: lead invert -->
+<!-- _paginate: false -->
+
+# Signals の特徴③
+
+# メモ化（割愛）
+
+<!-- 
+次に、signalsの3つ目の特徴として、メモ化について解説していきます。
+と言いたいところですが、メモ化自体は珍しくない機能なので、今回は割愛させていただきます。同じ入力であれば再計算せずにキャッシュしておいた値を返すやつです。
 -->
 
 ---
@@ -265,53 +323,8 @@ isEvenの再計算結果が同じ場合は、通知されず、再レンダリ�
 # 依存関係の追跡を実現しているのか
 
 <!-- 
-このDeep Diveセッションの本題。
-Signalsがどのような仕組みで依存関係の自動追跡を実現しているのかを詳しく解説していく。
-基本は、TC39プロポーザルの内容と、それに基づくsignal-polyfillsの実装を元にしている。
- -->
-
---- 
-
-## Push型<span class="reset">：状態変更時に、依存先へ即座に通知・再計算する方式</span>
-例：Pub/Sub、WebSocket、プッシュ通知
-- 常に最新状態
-- 無駄な再計算が発生しやすい
-
-## Pull型<span class="reset">：値が必要になった時に取得して計算する方式</span>
-
-例：ポーリング、関数呼び出し
-- 必要なときに取得して計算
-- 変更されていなくても取得してしまう
-
-
-<!-- 
-データの通信方式にはPush型とPull型があります。
-Signalsはどちらになるのでしょうか？
-
-まずは、それぞれの方式の例と、特徴を。
-Push型は状態変更時に、依存先へ即座に通知、再計算する方式。つまり変更時に頑張る方式。
-ネットワークの文脈だとPub/Subが代表例です。あとはイベントや、コールバックなど。
-リアルタイム同期に使われる方式で、常に最新状態を維持できるが、通知された値がそのタイミングで必要かどうかを考えずに通知するため、無駄な再計算が発生しやすい
-
-一方で、Pull型は値が必要になった時に取得して計算する方式。つまり値を読む時に頑張る方式。
-ネットワークの文脈だとポーリングになります。あとは通常の関数呼び出しなど。
-値が変更されていなくても取得しにいく必要がある、という無駄がある。
-
-どちらの方式も一長一短。場合によって使い分ける必要がある。
-ではSignalsはどちらか。
-
+最後に、今までの特徴を踏まえて、signalsがどうやって依存関係の追跡を実現しているのか、を詳しく追いかけていきます。
 -->
-
----
-
-## Signals は Push-Pull ハイブリッド方式
-
-- Computedの評価は**Pull型**
-- Stateの変更は即座に通知される**Push型**
-
-<!-- 
-Computedの評価はPull型。元となるStateの値がずっと前に変更されていても、getされたタイミングで取得し、再計算する。一方で、Stateの変更は即座に通知されるPush型。したがって、SignalsはPush-Pullのハイブリット型といえる。
- -->
 
 ---
 
@@ -323,14 +336,14 @@ Computedの評価はPull型。元となるStateの値がずっと前に変更さ
 
 <!-- 
 signalsは3ステップで依存関係を追跡しています。
-まず、signalsはruntime経由でStateとComputed、ComputedとEffectの間に双方向の依存グラフを構築する。
-次に、Pushフェーズ。Stateが更新されたときに、変更されて古くなった、というフラグだけを、伝播する。このタイミングではまだ再計算しない。
-最後に、Pullフェーズ。通知されたフラグを見て、必要であれば再計算する。
+まず、signalsはruntime経由でStateとComputed、ComputedとEffectの間に双方向の依存グラフを構築します。
+次に、Pushフェーズ。Stateが更新されたときに、変更されて古くなった、というフラグだけを伝播します。このタイミングではまだ再計算しません。
+最後に、Pullフェーズ。通知されたフラグを見て、必要であれば再計算します。
  -->
 
 ---
 
-### 例：カウンターと偶奇判定
+## 具体的例で解説していく
 
 ```js
 const counter = new Signal.State(0);
@@ -345,16 +358,38 @@ effect(() => {
 `counter → parity → effect`の依存
 
 <!-- 
-カウンターと偶奇判定の例で、もっと具体的に見ていく。
+カウンターと偶奇判定の例で、具体的に解説していきます。
 parityがcounterに依存して、effectがparityに依存している。
-
  -->
 
 ---
 
 ### 依存グラフの構築
 
+<img class="code-image" src="../images/code.svg">
+
 <pre class="mermaid">
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#fff8e1",
+      "actorBkg": "#E3F2FD",
+      "actorBorder": "#0288d1",
+      "actorTextColor": "#455a64",
+      "signalColor": "#455a64",
+      "signalTextColor": "#455a64",
+      "labelBoxBkgColor": "#E1F5FE",
+      "labelBoxBorderColor": "#0288d1",
+      "labelTextColor": "#455a64",
+      "activationBorderColor": "#0288d1",
+      "activationBkgColor": "#BBDEFB",
+      "primaryTextColor": "#455a64",
+      "lineColor": "#455a64"
+    }
+  }
+}%%
+
 sequenceDiagram
     participant C as Computed(parity)
     participant R as runtime
@@ -373,20 +408,43 @@ sequenceDiagram
 </pre>
 
 <!-- 
-まず、依存グラフを構築する。
-実際はもう一つ左にeffectがいて、effectとComputedの間にも構築されるが、話が複雑になるため、StateとComputedの間の話だけする。
-StateとComputedはruntime経由で、activeConsumerという変数を共有している。
-Computedは実行時にactiveConsumerに自身を登録した上で、countを読む。
-呼び出されたState側は、activeConsumerを読んで、登録されているconsumerを、subscribers、つまり自身を呼び出しているconsumer一覧に登録する。
+まず、依存グラフを構築します。
+実際はもう一つ左にeffectがいて、effectとComputedの間にも依存グラフが構築されるますが、複雑になるので省略しています。
+StateとComputedはruntime経由で、activeConsumerという変数を共有しています。
+Computedは実行時にactiveConsumerに自身を登録した上で、countを読みにいきます。
+呼び出されたState側は、activeConsumerを読んで、登録されているconsumerを、subscribers、つまり自身を呼び出しているconsumer一覧に登録します。
 これによってStateとComputedの間の依存グラフが構築される。
-ちなみにComputedはnestするので、実際のactiveConsumerはstackになっている。
+ちなみにComputedはnestするので、実際のactiveConsumerはstack構造になっています。
 -->
 
 ---
 
 ### Push
 
+<img class="code-image" src="../images/code.svg">
+
 <pre class="mermaid">
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#fff8e1",
+      "actorBkg": "#E3F2FD",
+      "actorBorder": "#0288d1",
+      "actorTextColor": "#455a64",
+      "signalColor": "#455a64",
+      "signalTextColor": "#455a64",
+      "labelBoxBkgColor": "#E1F5FE",
+      "labelBoxBorderColor": "#0288d1",
+      "labelTextColor": "#455a64",
+      "activationBorderColor": "#0288d1",
+      "activationBkgColor": "#BBDEFB",
+      "primaryTextColor": "#455a64",
+      "lineColor": "#455a64"
+    }
+  }
+}%%
+
 sequenceDiagram
     participant E as effect
     participant C as Computed(parity)
@@ -403,15 +461,38 @@ sequenceDiagram
 </pre>
 
 <!-- 
-Pushフェーズ。
-アプリケーションがcounterを変更した場合、
-Stateは「変更されたこと」だけを伝播する。再計算はまだしない。
+次にPushフェーズです。。
+アプリケーションがcounterを変更した場合を考えます。
+Stateはdirtyフラグとして、「変更されたこと」だけを伝播する。再計算はまだしない。
 -->
 ---
 
 ### Pull
 
+<img class="code-image" src="../images/code.svg">
+
 <pre class="mermaid">
+%%{
+  init: {
+    "theme": "base",
+    "themeVariables": {
+      "background": "#fff8e1",
+      "actorBkg": "#E3F2FD",
+      "actorBorder": "#0288d1",
+      "actorTextColor": "#455a64",
+      "signalColor": "#455a64",
+      "signalTextColor": "#455a64",
+      "labelBoxBkgColor": "#E1F5FE",
+      "labelBoxBorderColor": "#0288d1",
+      "labelTextColor": "#455a64",
+      "activationBorderColor": "#0288d1",
+      "activationBkgColor": "#BBDEFB",
+      "primaryTextColor": "#455a64",
+      "lineColor": "#455a64"
+    }
+  }
+}%%
+
 sequenceDiagram
     participant E as effect
     participant C as Computed(parity)
@@ -426,9 +507,9 @@ sequenceDiagram
 </pre>
 
 <!-- 
-Pullフェーズ。
+最後にPullフェーズ。
 effectが実行され、Computedが呼ばれたとき、先ほど通知されたdirtyの値をみる。
-dirtyじゃなかったら、キャッシュしていた値を返し、dirtyだったら再計算して返す。
+dirtyだったら再計算し、dirtyじゃなかったら、キャッシュしていた値を返します。
 これにより、無駄な再計算が発生しない仕組みを実現している。
 -->
 
@@ -436,15 +517,15 @@ dirtyじゃなかったら、キャッシュしていた値を返し、dirtyだ�
 
 ## Signals Deep Dive のまとめ
 
-- 「誰が誰を読んだか」の依存グラフを構築する
-- Push-Pull ハイブリッド方式により必要時だけ再計算する
+- #### Signals は「誰が誰を読んだか」を runtime に記録する
+- #### 依存グラフにより変更伝搬を自動化する
+- #### Push-Pull ハイブリッド方式により必要時だけ再計算する
 
 ---
 
 <!-- 
 まとめです。
-Signalsは「誰が誰を読んだか」という依存グラフを構築する。
-その依存関係をもとに、Push-Pullハイブリッド方式で効率的に再計算する。
+Signalsは「誰が誰を読んだか」という依存グラフを構築して、変更伝搬を自動化します。そして、その依存関係をもとに、Push-Pullハイブリッド方式で効率的に再計算する。
  -->
 
 <!-- _class: lead invert -->
