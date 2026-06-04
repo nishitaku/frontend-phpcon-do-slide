@@ -60,9 +60,13 @@ Angularが好きで、よく使っています。使ってる人少ないので�
 
 # Signals 知ってる人〜 :hand:
 
+#### （Vue.jsのref、SvelteのRuneなど含む）
+
 <!--
-早速ですが、ちょっと教えてください。
+本セッションはSignals Deep Diveということで。
+早速ですが、ちょっと聞いてみたいことがあります。
 signals知ってる人〜。使ってる人〜。
+Vueのrefやスベルトのルーンも含めちゃっていいです！
 やっぱりReactの人が多いのか、使ってる人は少ないですね。
 -->
 
@@ -433,7 +437,6 @@ signalsはこの3ステップで依存関係の追跡を実現しています。
 -->
 
 ---
-<!-- _footer: "※実際はeffectとComputedの間にも構築される" -->
 
 ## 依存グラフの構築
 
@@ -591,10 +594,8 @@ effectが実行されたとき、まず、自身の依存先であるComputedを
 ## Signal Polyfill の実装
 
 - #### 依存関係の追跡は、双方向の依存グラフによって実現
-  - データを保持する側 `producer`
-    - `producer.subscribers`に`consumer`を登録
-  - データを取得する側 `consumer`
-    - `consumer.dependencies`に`producer`を登録
+- データを保持する側 は`producer.subscribers`に`consumer`を登録
+- データを取得する側 は`consumer.dependencies`に`producer`を登録
 
 <!-- 
 signal polyfillの実装についてまとめます。
